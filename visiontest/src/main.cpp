@@ -8,6 +8,10 @@
 /*----------------------------------------------------------------------------*/
 
 // ---- START VEXCODE CONFIGURED DEVICES ----
+// Robot Configuration:
+// [Name]               [Type]        [Port(s)]
+// RangeFinderE         sonar         E, F            
+// RangeFinderG         sonar         G, H            
 // ---- END VEXCODE CONFIGURED DEVICES ----
 
 #include "vex.h"
@@ -25,7 +29,7 @@ vex::motor Ramp_Motor = vex::motor(vex::PORT14, true);
 vex::motor Arm_Motor = vex::motor(vex::PORT19, true);
 vex::motor Left_Intake_Motor = vex::motor(vex::PORT11, true);
 vex::motor Right_Intake_Motor = vex::motor(vex::PORT20, false);
-vex::vision Vision = vex::vision(vex::PORT5);
+vex::vision Vision = vex::vision(vex::PORT15);
 
 const double TURNING_RATE = 1.0;
 const double MOVING_RATE = 1.0;
@@ -39,9 +43,9 @@ const int VISION_OFFSET = 0;
 
 const int PURPLE = 0;
 const int GREEN = 1;
-int level_count=0;
+int level_count = 0;
 int DR4B_LEVEL = 0;
-void LimitSwitchPressed() { Arm_Motor.stop(); }
+//void LimitSwitchPressed() { Arm_Motor.stop(); }
 
 // define your global instances of motors and other devices here
 // Absolute value function, i.e: x=|x|
@@ -70,13 +74,14 @@ double capMinMax(double val, double min, double max) {
 }
 int Ramp_power() {
   float Ramp_Speed;
-  if (Ramp_Motor.rotation(rotationUnits::deg) <= 400) {
+  Ramp_Speed = 100 -Ramp_Motor.rotation(rotationUnits::deg) /12 ;
+  /*if (Ramp_Motor.rotation(rotationUnits::deg) <= 400) {
     Ramp_Speed = 100;
-  } else if (400 < Ramp_Motor.rotation(rotationUnits::deg) <= 500) {
+  } else if (400 < Ramp_Motor.rotation(rotationUnits::deg) <= 450) {
     Ramp_Speed = 50;
   } else {
     Ramp_Speed = 10;
-  }
+  }*/
   return Ramp_Speed;
 }
 // The Wheel's circumfrence is pi*4 inches
@@ -88,16 +93,6 @@ void setLeftRightDriveSpeed(int leftSpeed = 0, int rightSpeed = 0) {
   FrontRight_Motor.spin(directionType::fwd, rightSpeed, velocityUnits::pct);
   BackRight_Motor.spin(directionType::fwd, rightSpeed, velocityUnits::pct);
 }
-void swaysSpin(float leftSpeed, int rightSpeed = 85) {
-  FrontLeft_Motor.spin(directionType::fwd, leftSpeed,
-                            velocityUnits::pct);
-  BackLeft_Motor.spin(directionType::rev, leftSpeed,
-                           velocityUnits::pct);
-  FrontRight_Motor.spin(directionType::rev, rightSpeed,
-                             velocityUnits::pct);
-  BackRight_Motor.spin(directionType::fwd, rightSpeed,
-                            velocityUnits::pct);
-}
 void driveForLeftRight(float leftRevs, float rightRevs, int speed) {
   FrontLeft_Motor.rotateFor(leftRevs, rotationUnits::rev, speed,
                             velocityUnits::pct, false);
@@ -107,6 +102,16 @@ void driveForLeftRight(float leftRevs, float rightRevs, int speed) {
                              velocityUnits::pct, false);
   BackRight_Motor.rotateFor(rightRevs, rotationUnits::rev, speed,
                             velocityUnits::pct, true);
+}
+void swaysSpin(float leftSpeed, int rightSpeed = 0) {
+  FrontLeft_Motor.spin(directionType::fwd, leftSpeed,
+                            velocityUnits::pct);
+  BackLeft_Motor.spin(directionType::rev, leftSpeed,
+                           velocityUnits::pct);
+  FrontRight_Motor.spin(directionType::rev, rightSpeed,
+                             velocityUnits::pct);
+  BackRight_Motor.spin(directionType::fwd, rightSpeed,
+                            velocityUnits::pct);
 }
 void driveFor(float inches, int speed = 85) {
   FrontLeft_Motor.rotateFor(inToRev(inches), rotationUnits::rev, speed,
@@ -157,19 +162,28 @@ void Intake(bool dir, int speed) {
     Right_Intake_Motor.spin(directionType::fwd, -90, velocityUnits::pct);
   }
 }
-void Raise_DR4B(int level) {
-  float degRamp= Ramp_Motor.rotation(rotationUnits::deg);
-  float degDR4B= Arm_Motor.rotation(rotationUnits::deg);
-if (level==1){degRamp= 500;degDR4B= -650;}
-else if(level== 2){degRamp=600;degDR4B=-850;}
-else if(level== 3){degRamp=800;degDR4B=-1300;}
-else if (level==0){degRamp=0;degDR4B=0;}
-  Ramp_Motor.rotateTo(degRamp, rotationUnits::deg,100,velocityUnits::pct,false);
-//task::sleep(100);
-Arm_Motor.rotateTo(degDR4B, rotationUnits::deg,100,velocityUnits::pct,true);
-
- 
- 
+void Raise_DR4B(int level, int raiseSpeed = 100) {
+  float degRamp = Ramp_Motor.rotation(rotationUnits::deg);
+  float degDR4B = Arm_Motor.rotation(rotationUnits::deg);
+  if (level == 1) {
+    degRamp = 500;
+    degDR4B = -650;
+  } else if (level == 2) {
+    degRamp = 600;
+    degDR4B = -850;
+  } else if (level == 3) {
+    degRamp = 800;
+    degDR4B = -1300;
+  } else if (level == 0) {
+    degRamp = 0;
+    degDR4B = 0;
+    raiseSpeed = 55;
+  }
+  Ramp_Motor.rotateTo(degRamp, rotationUnits::deg, raiseSpeed,
+                      velocityUnits::pct, false);
+  // task::sleep(100);
+  Arm_Motor.rotateTo(degDR4B, rotationUnits::deg, 100, velocityUnits::pct,
+                     true);
 }
 void stack(void) {
   Ramp_Motor.rotateFor(2.27, rotationUnits::rev, 100, velocityUnits::pct);
@@ -180,35 +194,58 @@ void stack(void) {
 }
 
 void scoretower(bool height) {}
+#pragma region "Sonar rotation code"
+void SonarRotation(float maxPower = 55, float minPower = 3, int timeOut = 600) {
+  float kp = 3.75;
+  float sonar1val = 0;
+  float sonar2val = 0;
+  float error = 0;
+  int ticksElapsed = 0;
+  int timeTicks = 0;
+  bool atTarget = false;
+  float targetReading = 0;
 
-#pragma region "vision rotate code"
+  while (!atTarget || (timeTicks < timeOut)) {
+    error= sonar1val- sonar2val;
+
+  }
+}
+#pragma endRegion
+
+#pragma region "vision code"
 
 int getVisionObjX(int colour) {
-  if (colour == PURPLE)
+  // if (colour == PURPLE)
   Vision.takeSnapshot(SIG_1);
-  else
-  Vision.takeSnapshot(SIG_2);
+  // else
+  // Vision.takeSnapshot(SIG_2);
 
   int objCount = Vision.objectCount;
 
   // Find the object closest to the center.
   // driveFor(2,90);
-  int closestDistance = 30000;
+  // int closestDistance = 30000;
+  int closestDistance = 0;
+  int biggest_object = 0;
   for (int i = 0; i < objCount; i++) {
-    // if (Vision.objects[i].width > 4 &&
-    // Vision.objects[i].height > 4) { // Ignore tiny objects
-    // Find distance from center
-    int disFromCenter = (VISION_WIDTH / 2) - Vision.objects[i].centerX;
-    if (abs(disFromCenter) < abs(closestDistance)) {
-      closestDistance = disFromCenter;
+    if (Vision.objects[i].width > 4 &&
+        Vision.objects[i].height > 4) { // Ignore tiny objects
+      // Find distance from center
+      // int disFromCenter = (VISION_WIDTH / 2) - Vision.objects[i].centerX;
+      int disFromCenter = Vision.objects[i].width * Vision.objects[i].height;
+      if (abs(disFromCenter) > abs(closestDistance)) {
+        closestDistance = disFromCenter;
+        biggest_object = i;
+      }
     }
-    //}
 
     // break;
   }
-  Controller.Screen.print(objCount);
-  wait(20, msec);           // Sleep the task for a short amount of time to
-  Controller.Screen.clearLine(); // prevent wasted resources.
+  closestDistance = (VISION_WIDTH / 2) - Vision.objects[biggest_object].centerX;
+
+  // Controller.Screen.print(closestDistance);
+  wait(20, msec); // Sleep the task for a short amount of time to
+  // Controller.Screen.clearLine(); // prevent wasted resources.
   // if (i > 10)
   return closestDistance;
 }
@@ -219,7 +256,7 @@ void aimRobot(int colour) {
   float maxPower = 50;
   float minPower = 2;
   int timeOut = 4000 / 67; // 4000 / 67;
-  float kp = 10;           // this is the kp. Change this down to make
+  float kp = .10;         // this is the kp. Change this down to make
 
   // Init timer stuff.
   int ticksElapsed = 0;
@@ -230,7 +267,7 @@ void aimRobot(int colour) {
   bool atTarget = false;
 
   // run motors until target is within n px certainty
-  while (!atTarget && (timeTicks < timeOut)) {
+  while (!atTarget || (timeTicks < timeOut)) {
     // Find distance from center.
 
     int disFromCenter = getVisionObjX(colour);
@@ -246,7 +283,7 @@ void aimRobot(int colour) {
     // Brain.Screen.print(closestDistance);
     drivePower = error * kp;
     drivePower = capMinMax(drivePower, minPower, maxPower);
-    // setLeftRightDriveSpeed(drivePower, -drivePower);
+    setLeftRightDriveSpeed(drivePower, -drivePower);
 
     // check for finish
     if (abs(error) > 9) {
@@ -261,17 +298,14 @@ void aimRobot(int colour) {
   }
   setLeftRightDriveSpeed(0, 0);
 }
-#pragma endregion
-#pragma region "vision sideways code"
 
 
-// This is the camera code.
 void SwaysRobot(int colour) {
   // initialize P loop variables
   float maxPower = 50;
-  float minPower = 2;
-  int timeOut = 4000 / 67; // 4000 / 67;
-  float kp = 10;           // this is the kp. Change this down to make
+  float minPower = 4;
+  int timeOut = 59; // 4000 / 67;
+  float kp = .3;         // this is the kp. Change this down to make
 
   // Init timer stuff.
   int ticksElapsed = 0;
@@ -282,7 +316,7 @@ void SwaysRobot(int colour) {
   bool atTarget = false;
 
   // run motors until target is within n px certainty
-  while (!atTarget && (timeTicks < timeOut)) {
+  while (!atTarget || (timeTicks < timeOut)) {
     // Find distance from center.
 
     int disFromCenter = getVisionObjX(colour);
@@ -298,7 +332,7 @@ void SwaysRobot(int colour) {
     // Brain.Screen.print(closestDistance);
     drivePower = error * kp;
     drivePower = capMinMax(drivePower, minPower, maxPower);
-    // setLeftRightDriveSpeed(drivePower, -drivePower);
+    swaysSpin(drivePower, drivePower);
 
     // check for finish
     if (abs(error) > 9) {
@@ -310,10 +344,14 @@ void SwaysRobot(int colour) {
     ticksElapsed++;
     timeTicks++;
     task::sleep(HZ_15_WAIT);
+    
   }
   setLeftRightDriveSpeed(0, 0);
+  
 }
+
 #pragma endregion
+
 void pre_auton(void) {
   // Initializing Robot Configuration. DO NOT REMOVE!
   vexcodeInit();
@@ -333,26 +371,27 @@ void pre_auton(void) {
 /*---------------------------------------------------------------------------*/
 
 void autonomous(void) {
-  initiate();
-  Intake(0, 45);
-  // aimRobot(PURPLE);
+  /*initiate();
+  
+  aimRobot(PURPLE);
   driveFor(20, 70);
   driveFor(-20, 40);
   task::sleep(500); // goes for the first set of boxes
 
   driveFor(-35, 70);
   task::sleep(500);
-  sideways(-29, 70); // retreats
+   // retreats*/
 
-  // aimRobot(PURPLE);
-
-  driveFor(17, 70);
-  driveFor(20, 40);
-  task::sleep(500);
-  driveFor(-38, 70);
+  //driveFor(15, 49);
+  SwaysRobot(PURPLE);
+  /*Intake(0, 45);  
+  driveFor(40, 40);
+  task::sleep(300);
   intakeoff();
-
-  // driveForLeftRight(-1.7, 1.7, 70);
+  driveFor(-38, 40);
+  
+  driveForLeftRight(1.7,-1.7, 40);
+  sideways(29, 70);*/
   // driveFor(7, 70);
   // stack();
 }
@@ -424,21 +463,23 @@ void usercontrol(void) {
         Ramp_Motor.stop(brakeType::coast);
       }
     }
-    if(Controller.ButtonRight.pressing()){
-      aimRobot(purple);
+    if (Controller.ButtonRight.pressing()) {
+      aimRobot(PURPLE);
     }
     if (Controller.ButtonA.pressing()) {
-      level_count +=1;
-      if (level_count > 3){level_count = 0;}
-      Raise_DR4B(level_count);
-
+      level_count += 1;
+      if (level_count > 3) {
+        level_count = 0;
       }
+      Raise_DR4B(level_count);
+    }
     if (Controller.ButtonY.pressing()) {
-      level_count -=1;
-      if (level_count < 0){level_count = 3;}
-      Raise_DR4B(level_count);
-
+      level_count = 0;
+      if (level_count < 0) {
+        level_count = 3;
       }
+      Raise_DR4B(level_count);
+    }
 
     // ..........................................................................
     if (Controller.ButtonB.pressing()) {
@@ -472,10 +513,14 @@ void usercontrol(void) {
       FrontRight_Motor.spin(directionType::rev, 10, velocityUnits::pct);
       BackRight_Motor.spin(directionType::rev, 10, velocityUnits::pct);
     }
-
-    //Controller.Screen.print(level_count);
+Controller.Screen.setCursor(1,1);
+    Controller.Screen.print(Ramp_Motor.rotation(rotationUnits::deg));
+    Controller.Screen.newLine();
+    Controller.Screen.setCursor(2,1);
+    Controller.Screen.print(Ramp_power());
+    //Brain.Screen.print(RangeFinderG.distance(inches));
     wait(20, msec); // Sleep the task for a short amount of time to
-    //Controller.Screen.clearLine(); // prevent wasted resources.
+    Controller.Screen.clearLine(); // prevent wasted resources.
   }
 }
 
